@@ -131,30 +131,135 @@ enum arg_ret {
     ARG_POS,
 };
 
-// TODO: this should return the arg type (long, short, subc, etc...) as an enum
-// value. consumer will switch on enum val type (see above enum).
-// TODO: use optopt???
-int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
-    int i, n_args;
-    arg_arg_t *arg = NULL, **args;
-    char *arg_str;
-    unsigned int arg_len, *n_pos_seen, *n_pos;
+int validate_end_state(arg_t *s, arg_config_t *config) {
+    // TODO: leave this validation up to user?
+    //       Basic validation here, but complex validation for user...
+    if (config->subcommand_required && !s->in_subc)
+        return ARG_ERR; // subcommand required
+    if (config->positional_args_required && s->n_pos_seen < s->n_arg_pos)
+        return ARG_ERR; // all positional args required
+    if (config->subcommand_required && s->in_subc)
+        if (config->positional_args_required &&
+            s->n_spos_seen < s->n_subc_pos[s->subc_idx])
+            return ARG_ERR; // subcommand positional args required
+    return ARG_DONE;
+}
 
-    if (s->optind == argc) {
-        // TODO: leave this validation up to user?
-        //       Basic validation here, but complex validation for user...
-        if (config->subcommand_required && !s->in_subc)
-            return ARG_ERR; // subcommand required
-        if (config->positional_args_required && s->n_pos_seen < s->n_arg_pos)
-            return ARG_ERR; // all positional args required
-        if (config->subcommand_required && s->in_subc)
-            if (config->positional_args_required &&
-                s->n_spos_seen < s->n_subc_pos[s->subc_idx])
-                return ARG_ERR; // subcommand positional args required
-        return ARG_DONE; // TODO: validate that all required args were found
-    }
+int parse_short(arg_t *s, int n_args, arg_arg_t **args, int argc, char **argv) {
+    int i;
+    arg_arg_t *arg = NULL;
+    char *arg_str;
 
     arg_str = argv[s->optind];
+    for (i = 0; i < n_args; i++)
+        if (args[i]->shortname == arg_str[s->optpos]) {
+            arg = args[i];
+            break;
+        }
+    if (i == n_args)
+        return ARG_ERR; // arg unknown... err str... keep parsing?
+    s->argind = i;
+    arg = args[i];
+    if (arg->type & ARG_REQUIRED) {
+        s->optpos++;
+        if (!arg_str[s->optpos] && s->optind == argc - 1) // this is the end
+            // TODO: continue parsing if no arg (not at end)?
+            return ARG_ERR; // Needed argument
+        if (!arg_str[s->optpos])
+            s->optarg = argv[++s->optind]; // TODO: validate this is not a flag?
+        else if (arg_str[s->optpos] == '=')
+            s->optarg = &arg_str[++s->optpos];
+        else
+            s->optarg = &arg_str[s->optpos];
+        s->optpos = 1;
+        s->optind++;
+        return ARG_ARG;
+    }
+    if (!arg_str[++s->optpos]) {
+        s->optind++;
+        s->optpos = 1;
+    }
+    return ARG_FLAG;
+}
+
+int parse_long(arg_t *s, int n_args, arg_arg_t **args, int argc, char **argv) {
+    int i;
+    unsigned int arg_len;
+    arg_arg_t *arg = NULL;
+    char *arg_str;
+
+    arg_str = argv[s->optind];
+    s->optpos = 2;
+    for (i = 0; i < n_args; i++) {
+        arg_len = strlen(args[i]->longname);
+        if (!strncmp(args[i]->longname, &arg_str[s->optpos], arg_len)) {
+            arg = args[i];
+            break;
+        }
+    }
+    if (!arg)
+        return ARG_ERR; // Unexpected argument
+    s->argind = i;
+    if (arg->type & ARG_REQUIRED) {
+        s->optpos += arg_len; // advance to end of arg
+        if (!arg_str[s->optpos] && s->optind == argc - 1) // this is the end
+            // TODO: continue parsing if no arg (not at end)?
+            return ARG_ERR; // Needed argument
+        if (!arg_str[s->optpos])
+            s->optarg = argv[++s->optind]; // TODO: validate this is not a flag?
+        else if (arg_str[s->optpos] == '=')
+            s->optarg = &arg_str[++s->optpos];
+        else
+            s->optarg = &arg_str[s->optpos];
+        s->optpos = 1;
+        s->optind++;
+        return ARG_ARG;
+    }
+    s->optind++;
+    s->optpos = 1;
+    return ARG_FLAG;
+}
+
+int parse_subcommand_or_positional(arg_t *s, const char **subcommands,
+                                   unsigned int *n_pos_seen,
+                                   unsigned int *n_pos, char **argv) {
+
+    int i;
+    char *arg_str;
+
+    arg_str = argv[s->optind];
+    for (i = 0; i < (int)s->n_subc; i++)
+        if (!strncmp(arg_str, subcommands[i], strlen(arg_str)))
+            break;
+    if (i == (int)s->n_subc) { // not matched, must be positional
+        if (*n_pos_seen == *n_pos) {
+            return ARG_ERR; // unrecognized argument, we've seen all
+                            // expected pos args
+        } else {
+            (*n_pos_seen)++;
+            s->optarg = arg_str;
+            s->optind++;
+            return ARG_POS;
+        }
+    } else {
+        if (s->in_subc)
+            return ARG_ERR; // already parsed subcommand
+        s->in_subc = 1;
+        s->subc_idx = i;
+        s->optarg = arg_str;
+        s->optind++;
+        return ARG_SUBC;
+    }
+}
+
+int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
+    int n_args;
+    arg_arg_t **args;
+    unsigned int *n_pos_seen, *n_pos;
+
+    if (s->optind == argc)
+        return validate_end_state(s, config);
+
     if (s->in_subc) {
         args = config->subcommand_args[s->subc_idx];
         n_args = s->n_subc_args[s->subc_idx];
@@ -167,103 +272,22 @@ int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
         n_pos = &s->n_arg_pos;
     }
 
-    if (!arg_str) {
-        return ARG_ERR;
+    if (!argv[s->optind]) {
+        return ARG_ERR; // not sure what the error would be here
 
-    } else if (is_doubledash(arg_str)) {
+    } else if (is_doubledash(argv[s->optind])) {
         // TODO: look in more detail into what happens after double dash
         s->optind++;
-        return ARG_ERR;
-
-    } else if (is_short(arg_str)) {
-        for (i = 0; i < n_args; i++)
-            if (args[i]->shortname == arg_str[s->optpos]) {
-                arg = args[i];
-                break;
-            }
-        if (i == n_args)
-            return ARG_ERR; // arg unknown... err str... keep parsing?
-        s->argind = i;
-        arg = args[i];
-        if (arg->type & ARG_REQUIRED) {
-            s->optpos++;
-            if (!arg_str[s->optpos] && s->optind == argc - 1) // this is the end
-                // TODO: continue parsing if no arg (not at end)?
-                return ARG_ERR; // Needed argument
-            if (!arg_str[s->optpos])
-                s->optarg =
-                    argv[++s->optind]; // TODO: validate this is not a flag?
-            else if (arg_str[s->optpos] == '=')
-                s->optarg = &arg_str[++s->optpos];
-            else
-                s->optarg = &arg_str[s->optpos];
-            s->optpos = 1;
-            s->optind++;
-            return ARG_ARG;
-        }
-        if (!arg_str[++s->optpos]) {
-            s->optind++;
-            s->optpos = 1;
-        }
-        return ARG_FLAG;
-
-    } else if (is_long(arg_str)) { // Long argument
-        s->optpos = 2;
+        return ARG_ERR; // prob not an error. but what is it? pos arg?
+    } else if (is_short(argv[s->optind])) {
+        return parse_short(s, n_args, args, argc, argv);
+    } else if (is_long(argv[s->optind])) { // Long argument
         if (!config->parse_long)
             return ARG_ERR; // Didn't expect long args
-        for (i = 0; i < n_args; i++) {
-            arg_len = strlen(args[i]->longname);
-            if (!strncmp(args[i]->longname, &arg_str[s->optpos], arg_len)) {
-                arg = args[i];
-                break;
-            }
-        }
-        if (!arg)
-            return ARG_ERR; // Unexpected argument
-        s->argind = i;
-        if (arg->type & ARG_REQUIRED) {
-            s->optpos += arg_len; // advance to end of arg
-            if (!arg_str[s->optpos] && s->optind == argc - 1) // this is the end
-                // TODO: continue parsing if no arg (not at end)?
-                return ARG_ERR; // Needed argument
-            if (!arg_str[s->optpos])
-                s->optarg =
-                    argv[++s->optind]; // TODO: validate this is not a flag?
-            else if (arg_str[s->optpos] == '=')
-                s->optarg = &arg_str[++s->optpos];
-            else
-                s->optarg = &arg_str[s->optpos];
-            s->optpos = 1;
-            s->optind++;
-            return ARG_ARG;
-        }
-        s->optind++;
-        s->optpos = 1;
-        return ARG_FLAG;
-
+        return parse_long(s, n_args, args, argc, argv);
     } else { // must be a positional arg or subcommand
-        for (i = 0; i < (int)s->n_subc; i++)
-            if (!strncmp(arg_str, config->subcommands[i], strlen(arg_str)))
-                break;
-        if (i == (int)s->n_subc) { // not matched, must be positional
-            if (*n_pos_seen == *n_pos) {
-                return ARG_ERR; // unrecognized argument, we've seen all
-                                // expected pos args
-            } else {
-                (*n_pos_seen)++;
-                s->optarg = arg_str;
-                s->optind++;
-                return ARG_POS;
-            }
-        } else {
-            if (s->in_subc)
-                return ARG_ERR; // already parsed subcommand
-            s->in_subc = 1;
-            s->subc_idx = i;
-            s->optarg = arg_str;
-            s->optind++;
-            return ARG_SUBC;
-        }
+        return parse_subcommand_or_positional(s, config->subcommands,
+                                              n_pos_seen, n_pos, argv);
     }
 
     return ARG_ERR; // unexpected parsing state.. got unexpected arg?
