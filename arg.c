@@ -25,6 +25,8 @@ typedef struct arg_config {
     const char *subcommands[MAX_SUBC];
     arg_arg_t *args[MAX_ARGS];
     arg_arg_t *subcommand_args[MAX_SUBC][MAX_ARGS];
+    unsigned int subcommand_required;
+    unsigned int positional_args_required;
 } arg_config_t;
 
 typedef struct arg {
@@ -138,8 +140,20 @@ int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
     char *arg_str;
     unsigned int arg_len, *n_pos_seen, *n_pos;
 
-    if (s->optind == argc)
+    if (s->optind == argc) {
+        // TODO: leave this validation up to user?
+        //       Basic validation here, but complex validation for user...
+        if (config->subcommand_required && !s->in_subc)
+            return ARG_ERR; // subcommand required
+        if (config->positional_args_required && s->n_pos_seen < s->n_arg_pos)
+            return ARG_ERR; // all positional args required
+        if (config->subcommand_required && s->in_subc)
+            if (config->positional_args_required &&
+                s->n_spos_seen < s->n_subc_pos[s->subc_idx])
+                return ARG_ERR; // subcommand positional args required
         return ARG_DONE; // TODO: validate that all required args were found
+    }
+
     arg_str = argv[s->optind];
     if (s->in_subc) {
         args = config->subcommand_args[s->subc_idx];
@@ -251,7 +265,8 @@ int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
             return ARG_SUBC;
         }
     }
-    return ARG_ERR; // unexpected parsing state
+
+    return ARG_ERR; // unexpected parsing state.. got unexpected arg?
 }
 
 enum subcommands {
@@ -269,6 +284,8 @@ int main(int argc, char **argv) {
     arg_config_t cli_config = {
         .parse_long = 1,
         .subcommands = {"command1", "command2", NULL},
+        .subcommand_required = 1,
+        .positional_args_required = 1,
         .args =
             {
                 ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG,
