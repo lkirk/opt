@@ -7,20 +7,6 @@
 #define MAX_SUBC_LEN 256
 #define MAX_ARG_LEN 512
 
-// these are the values we accept as short arguments
-static const char ascii[128] = {
-    '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0',
-    '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0',
-    '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0',
-    '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0',
-    '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0',
-    '\0', '\0', '\0', '\0', '\0', 'A',  'B',  'C',  'D',  'E',  'F',  'G',
-    'H',  'I',  'J',  'K',  'L',  'M',  'N',  'O',  'P',  'Q',  'R',  'S',
-    'T',  'U',  'V',  'W',  'X',  'Y',  'Z',  '\0', '\0', '\0', '\0', '\0',
-    '\0', 'a',  'b',  'c',  'd',  'e',  'f',  'g',  'h',  'i',  'j',  'k',
-    'l',  'm',  'n',  'o',  'p',  'q',  'r',  's',  't',  'u',  'v',  'w',
-    'x',  'y',  'z',  '\0', '\0', '\0', '\0', '\0'};
-
 // TODO: all max checks... should we add +1 to the max?
 
 #define ARG_REQUIRED (1U << 1)
@@ -62,8 +48,6 @@ typedef struct arg {
     unsigned int n_subc_args[MAX_SUBC];   // Number of args per subc
     unsigned int n_subc_pos[MAX_SUBC];    // Num positional args for each subc
     int subc_pos_idx[MAX_SUBC][MAX_ARGS]; // Subc positional arg idx
-    int arg_idx[128];
-    int sarg_idx[MAX_SUBC][128];
 } arg_t;
 
 static unsigned int is_doubledash(char *s) {
@@ -87,15 +71,6 @@ unsigned int is_subcommand(char *s, char **subcs) {
     return 0;
 }
 
-unsigned int ascii_idx(char c) { return ascii[(int)(c)]; }
-
-// void count_types(arg_t *state, arg_arg_t *arg) {
-//     state->n_args++;
-//     if (arg->type & ARG_POSITIONAL)
-//         state->n_arg_pos++;
-//     if (arg->type & ARG_
-// }
-
 int arg_init(arg_t *state, arg_config_t *config) {
     // validate and initialize parsing state
     int i, j;
@@ -108,26 +83,22 @@ int arg_init(arg_t *state, arg_config_t *config) {
     memset(state->arg_pos_idx, -1, sizeof(*state->arg_pos_idx) * MAX_ARGS);
     memset(state->subc_pos_idx, -1,
            sizeof(**state->subc_pos_idx) * MAX_ARGS * MAX_SUBC);
-    memset(state->arg_idx, -1, sizeof(*state->arg_idx) * 128);
-    memset(state->sarg_idx, -1, sizeof(**state->sarg_idx) * 128 * MAX_SUBC);
     state->optind = 1;
     state->optpos = 1;
 
     for (i = 0; args[i] && i < MAX_ARGS; i++)
         if (args[i]->type & ARG_POSITIONAL)
             state->n_arg_pos++;
-        else
-            state->arg_idx[ascii_idx(args[i]->shortname)] = i;
     state->n_args = i;
     if (i == MAX_ARGS)
         return -1; // too many args or no null terminator
 
+    // TODO: ordering here might be a bit confusing...
+    //       check n subcommands then n args.
     for (i = 0; *(sargs = config->subcommand_args[i]) && i < MAX_SUBC; i++) {
         for (j = 0; sargs[j] && j < MAX_ARGS; j++)
             if (sargs[j]->type & ARG_POSITIONAL)
                 state->n_subc_pos[i]++;
-            else
-                state->sarg_idx[i][ascii_idx(sargs[j]->shortname)] = j;
         state->n_subc_args[i] = j;
     }
     if (i == MAX_SUBC)
@@ -162,7 +133,7 @@ enum arg_ret {
 // value. consumer will switch on enum val type (see above enum).
 // TODO: use optopt???
 int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
-    int i, n_args, *arg_idx;
+    int i, n_args;
     arg_arg_t *arg = NULL, **args;
     char *arg_str;
     unsigned int arg_len, *n_pos_seen, *n_pos;
@@ -175,13 +146,11 @@ int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
         n_args = s->n_subc_args[s->subc_idx];
         n_pos_seen = &s->n_spos_seen;
         n_pos = &s->n_subc_pos[s->subc_idx];
-        arg_idx = s->sarg_idx[s->subc_idx];
     } else {
         args = config->args;
         n_args = s->n_args;
         n_pos_seen = &s->n_pos_seen;
         n_pos = &s->n_arg_pos;
-        arg_idx = s->arg_idx;
     }
 
     if (!arg_str) {
@@ -192,8 +161,13 @@ int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
         s->optind++;
         return ARG_ERR;
 
-    } else if (is_short(arg_str)) { // TODO: need to test alnum before indexing
-        if ((i = arg_idx[ascii_idx(arg_str[s->optpos])]) == -1)
+    } else if (is_short(arg_str)) {
+        for (i = 0; i < n_args; i++)
+            if (args[i]->shortname == arg_str[s->optpos]) {
+                arg = args[i];
+                break;
+            }
+        if (i == n_args)
             return ARG_ERR; // arg unknown... err str... keep parsing?
         s->argind = i;
         arg = args[i];
