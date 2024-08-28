@@ -170,6 +170,8 @@ int parse_subcommand_or_positional(arg_t *s, const char **subcommands,
         s->optind++;
         return ARG_SUBC;
     }
+    // TODO: if no positional arguments are required, then validate the
+    // subcommand
 }
 
 int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
@@ -262,6 +264,7 @@ void arg_usage(char *argv0, arg_t *state, char *subc_name,
                argv0);
 }
 
+// TODO: validate that all required arguments were provided
 // TODO: minimal usage
 void arg_print_error(int ret, arg_t *s, char **argv) {
     unsigned int printed = 0;
