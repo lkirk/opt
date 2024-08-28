@@ -13,6 +13,8 @@
 #define ARG_POSITIONAL (1U << 2)
 #define ARG_HAS_ARG (1U << 3)
 
+#define MAX_HELP_LEN 4096
+
 typedef struct arg_arg {
     char shortname;
     char *longname;
@@ -23,6 +25,7 @@ typedef struct arg_arg {
 typedef struct arg_config {
     int parse_long;
     const char *subcommands[MAX_SUBC];
+    const char description[MAX_HELP_LEN];
     arg_arg_t *args[MAX_ARGS];
     arg_arg_t *subcommand_args[MAX_SUBC][MAX_ARGS];
     unsigned int subcommand_required;
@@ -90,7 +93,7 @@ int arg_init(arg_t *state, arg_config_t *config) {
 
     for (i = 0; args[i] && i < MAX_ARGS; i++)
         if (args[i]->type & ARG_POSITIONAL)
-            state->n_arg_pos++;
+            state->arg_pos_idx[state->n_arg_pos++] = i;
     state->n_args = i;
     if (i == MAX_ARGS)
         return -1; // too many args or no null terminator
@@ -293,6 +296,100 @@ int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config) {
     return ARG_ERR; // unexpected parsing state.. got unexpected arg?
 }
 
+void usage_main(char *argv0, arg_t *state, arg_config_t *config) {
+    size_t i, j, len = 0, pos_arg = 0, maxlen = 0;
+    arg_arg_t *arg, **args = config->args;
+
+    // TODO: basename of argv0??
+    printf("Usage: %s", argv0);
+    if (state->n_args > 0)
+        printf(" [OPTIONS]");
+    if (state->n_subc > 0) {
+        if (config->subcommand_required)
+            printf(" COMMAND");
+        else
+            printf(" [COMMAND]");
+    }
+    printf("\n\n%s\n", config->description);
+    if (state->n_subc > 0)
+        printf("\nSubcommands:\n");
+    for (i = 0; i < state->n_subc; i++)
+        printf("  %s\n", config->subcommands[i]); // TODO: subcommand help
+    if (state->n_args > 0) {
+        if (state->n_subc > 0)
+            printf("\nGlobal Options:\n");
+        else
+            printf("\nOptions:\n");
+    }
+
+    if (config->parse_long)
+        for (i = 0; i < state->n_args; i++) {
+            if ((len = strlen(args[i]->longname)) > maxlen)
+                maxlen = len;
+        }
+    maxlen += 12;
+    // indent + short + commaspace + longflag + long + spacing
+    // 2        2       2            2          max    4
+    for (i = 0; i < state->n_args; i++) {
+        if (state->arg_pos_idx[pos_arg] == (int)i) {
+            pos_arg++;
+            continue;
+        }
+        arg = args[i];
+        if (config->parse_long) {
+            len = strlen(arg->longname);
+            printf("  -%c, --%s", arg->shortname, arg->longname);
+        } else {
+            printf("  -%c", arg->shortname);
+        }
+        for (j = 0; j < maxlen - (8 + len); j++)
+            printf(" ");
+        printf("%s\n", arg->help);
+    }
+    if (state->n_subc > 0)
+        printf("\nRun '%s COMMAND --help' for information about a specific "
+               "subcommand\n",
+               argv0);
+}
+
+void usage_subcommand(char *argv0, arg_t *state, arg_config_t *config) {
+    size_t i, j, len = 0, pos_arg = 0, maxlen = 0;
+    arg_arg_t *arg, **args = config->subcommand_args[state->subc_idx];
+
+    // TODO: basename of argv0??
+    printf("Usage: %s", argv0);
+    printf(" %s", config->subcommands[state->subc_idx]);
+    if (state->n_subc_args[state->subc_idx] > 0)
+        printf(" [OPTIONS]");
+    printf("\n\n%s\n", "TODO: subcommand description");
+    printf("\nOptions:\n");
+
+    if (config->parse_long)
+        for (i = 0; i < state->n_subc_args[state->subc_idx]; i++) {
+            if ((len = strlen(config->args[i]->longname)) > maxlen)
+                maxlen = len;
+        }
+    maxlen += 12;
+    // indent + short + commaspace + longflag + long + spacing
+    // 2        2       2            2          max    4
+    for (i = 0; i < state->n_subc_args[state->subc_idx]; i++) {
+        if (state->arg_pos_idx[pos_arg] == (int)i) {
+            pos_arg++;
+            continue;
+        }
+        arg = args[i];
+        if (config->parse_long) {
+            len = strlen(arg->longname);
+            printf("  -%c, --%s", arg->shortname, arg->longname);
+        } else {
+            printf("  -%c", arg->shortname);
+        }
+        for (j = 0; j < maxlen - (8 + len); j++)
+            printf(" ");
+        printf("%s\n", arg->help);
+    }
+}
+
 enum subcommands {
     CMD_1,
     CMD_2,
@@ -307,6 +404,7 @@ int main(int argc, char **argv) {
     char *optarg;
     arg_config_t cli_config = {
         .parse_long = 1,
+        .description = "An example command line interface for testing",
         .subcommands = {"command1", "command2", NULL},
         .subcommand_required = 1,
         .positional_args_required = 1,
@@ -374,5 +472,9 @@ int main(int argc, char **argv) {
         }
     }
 out:
+    puts("===========================================");
+    usage_main(argv[0], &state, &cli_config);
+    puts("===========================================");
+    usage_subcommand(argv[0], &state, &cli_config);
     return ret;
 }
