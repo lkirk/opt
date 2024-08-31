@@ -14,9 +14,9 @@ int subcommand_1_main(int argc, char **argv, arg_t *state) {
     arg_config_t cli_config = {
         .parse_long = 1,
         .add_help = 1,
+        .subcommand_required = 0,
         .description = "Descriptive description of subcommand 1",
         .subcommands = {NULL},
-        .subcommand_required = 0,
         .args = {ARG('o', "o-opt", ARG_REQUIRED | ARG_HAS_ARG,
                      "Required o parameter."),
                  NULL}};
@@ -55,9 +55,9 @@ int subcommand_2_main(int argc, char **argv, arg_t *state) {
     arg_config_t cli_config = {
         .parse_long = 1,
         .add_help = 1,
-        .description = "Descriptive description of subcommand 1",
-        .subcommands = {NULL},
         .subcommand_required = 0,
+        .description = "Descriptive description of subcommand 2",
+        .subcommands = {NULL},
         .args = {ARG('f', "f-opt", 0, "Optional F flag (default false)."),
                  NULL}};
     // TODO: chain multiple subc names in nested subcs... up to user?
@@ -99,10 +99,10 @@ int main(int argc, char **argv) {
     unsigned int subc_found = 0;
     arg_config_t cli_config = {
         .parse_long = 1,
+        .add_help = 1,
+        .subcommand_required = 1,
         .description = "An example command line interface for testing",
         .subcommands = {"command1", "command2", NULL},
-        .subcommand_required = 1,
-        .add_help = 1,
         .args = {
             ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG,
                 "This is a required option, providing the A "
@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
                 a = state.optarg;
                 break;
             case 'b':
-                a = state.optarg;
+                b = state.optarg;
                 break;
             case 'c':
                 c = 1;
