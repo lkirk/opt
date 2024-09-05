@@ -6,6 +6,7 @@
 #define ARG_MAX_ARGS 30 // maximum number of arguments per command
 #define ARG_MAX_DESCR_LEN 4096
 #define ARG_MAX_SUBC 10
+#define ARG_MAX_NESTED_SUBC 10
 
 // TODO: rename whole lib to "opt"
 // Argument types
@@ -13,12 +14,12 @@
 #define ARG_POSITIONAL (1U << 2)
 #define ARG_HAS_ARG (1U << 3)
 // TODO: implement these...
-#define ARG_POS_MULTIPLE (1U << 4)
-#define ARG_POS_REQUIRED (1U << 5)
+#define ARG_POSITIONAL_MULTIPLE (1U << 4)
+#define ARG_POSITIONAL_REQUIRED (1U << 5)
 
 #define ARG(s, l, flag, help) (&(arg_arg_t){s, l, flag, help})
 #define POSITIONAL_ARG(name, flag, help)                                       \
-    (&(arg_arg_t){'\0', name, ARG_POSITIONAL, help})
+    (&(arg_arg_t){'\0', name, ARG_POSITIONAL | (flag), help})
 
 typedef struct arg_arg {
     char shortname;
@@ -48,13 +49,15 @@ typedef struct arg {
     size_t argind; // Index of parsed argument
     size_t n_args; // Number of arguments provided (not inc pos)
     //   subcommands
-    size_t n_subc;         // Number of subcommands configured
-    size_t subc_idx;       // Current index of found subarg
-    unsigned int has_subc; // Are we configured to use subc?
+    char *subc_name[ARG_MAX_NESTED_SUBC]; // Current subc name(s)
+    size_t n_subc;                        // Number of subcommands configured
+    size_t subc_idx;                      // Current index of found subcommand
+    unsigned int has_subc; // Are we configured to use subcommands?
     //   positional arguments
-    size_t n_pos_seen;             // Number of positional args encountered
-    size_t n_arg_pos;              // Num positional args
-    int arg_pos_idx[ARG_MAX_ARGS]; // Positional arg idx
+    size_t n_pos;              // Num positional args
+    size_t n_pos_seen;         // Number of positional args encountered
+    unsigned int has_mult_pos; // Do we expect multiple pos args?
+    int pos_idx[ARG_MAX_ARGS]; // Positional arg idx
 } arg_t;
 
 enum arg_err {
@@ -69,6 +72,8 @@ enum arg_err {
     ARG_ERR_GENERIC,
     ARG_ERR_NO_LONG_ARGS,
     ARG_ERR_SUBC_REQUIRED,
+    ARG_ERR_UNKNOWN_SUBC,
+    ARG_ERR_INIT,
 };
 
 enum arg_ret {
@@ -79,7 +84,7 @@ enum arg_ret {
 
 void arg_print_error(int ret, arg_t *s, char **argv);
 int arg_init(arg_t *state, arg_config_t *config, unsigned int in_subc);
-int arg_parse(int argc, char **argv, arg_t *s, arg_config_t *config);
+int arg_parse(int argc, char **argv, arg_t *s, const arg_config_t *config);
 void arg_usage(char *argv0, arg_t *state, char *subc_name,
                arg_config_t *config);
 #endif // ARG_H
