@@ -1,14 +1,55 @@
-project('arg', 'c', default_options: ['c_std=c99', 'default_library=static'])
-
-version = run_command(
-  'git', 'describe', '--always', '--dirty', check: false).stdout().strip()
+project(
+  'arg', 'c',
+  version: run_command(
+    'git', 'describe', '--always', '--dirty', check: false
+  ).stdout().strip(),
+  default_options: ['c_std=c99', 'default_library=static']
+)
 
 c_args = [
-  '-Wall', '-Wextra', '-Wpedantic', '-Werror',
-  '-DARG_VERSION="@0@"'.format(version)
+  '-Wall',
+  '-Wextra',
+  '-Wpedantic',
+  '-Werror',
+  '-Werror=vla',
+  '-pedantic-errors',
+  '-DARG_VERSION="@0@"'.format(meson.project_version())
 ]
+inc = include_directories('.')
 
-library('arg', 'arg.c', version: '0.1', soversion: '1')
+lib = library(
+  'arg',
+  'arg.c',
+  include_directories: inc,
+  version: '0.1',
+  soversion: '1',
+  install: true
+)
+arg_dep = declare_dependency(
+  link_with: lib,
+  version: meson.project_version()
+)
 
-test_arg = executable('test_arg', sources: ['arg.c', 'main.c'])
-test('test_arg', test_arg)
+if not meson.is_subproject()
+  test_c_args = ['-DARG_TEST']
+  cmocka = dependency('cmocka')
+  test_init = executable(
+    'test_init',
+    include_directories: inc,
+    dependencies: cmocka,
+    sources: ['arg.c', 'test_init.c']
+  )
+  test(
+    'test_init',
+    test_init,
+    env: 'CMOCKA_MESSAGE_OUTPUT=tap',
+    protocol: 'tap',
+    verbose: true
+  )
+  executable(
+    'ex_subcommands',
+    include_directories: inc,
+    link_with: lib,
+    sources: 'examples/subcommands.c'
+  )
+endif
