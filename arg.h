@@ -10,6 +10,7 @@
 
 // TODO: rename whole lib to "opt"
 // Argument types
+// TODO: validate that all required arguments were provided?
 #define ARG_REQUIRED (1U << 1)
 #define ARG_POSITIONAL (1U << 2)
 #define ARG_HAS_ARG (1U << 3)
@@ -20,6 +21,13 @@
 #define ARG(s, l, flag, help) (&(arg_arg_t){s, l, flag, help})
 #define POSITIONAL_ARG(name, flag, help)                                       \
     (&(arg_arg_t){'\0', name, ARG_POSITIONAL | (flag), help})
+
+#ifdef ARG_TEST
+#define ARG_PRIVATE
+#else
+#define ARG_PRIVATE static
+#endif
+#define ARG_UNUSED(x) x __attribute__((__unused__))
 
 typedef struct arg_arg {
     char shortname;
@@ -82,9 +90,20 @@ enum arg_ret {
     ARG_SUBC,
 };
 
+// Public API
 void arg_print_error(int ret, arg_t *s, char **argv);
 int arg_init(arg_t *state, arg_config_t *config, unsigned int in_subc);
 int arg_parse(int argc, char **argv, arg_t *s, const arg_config_t *config);
 void arg_usage(char *argv0, arg_t *state, char *subc_name,
                arg_config_t *config);
+
+#ifdef ARG_TEST
+ARG_PRIVATE int parse_short(arg_t *s, size_t n_args, arg_arg_t *const *args,
+                            int argc, char **argv);
+ARG_PRIVATE int parse_long(arg_t *s, size_t n_args, arg_arg_t *const *args,
+                           int argc, char **argv);
+ARG_PRIVATE int
+parse_subcommand_or_positional(arg_t *s, const char *const *subcs, char **argv);
+#endif
+
 #endif // ARG_H

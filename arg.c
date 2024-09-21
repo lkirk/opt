@@ -23,14 +23,6 @@ static unsigned int is_long(char *s) {
            s[2] != '\0';
 }
 
-unsigned int is_subcommand(char *s, char **subcs) {
-    size_t i;
-    for (i = 0; subcs[i] && i < ARG_MAX_SUBC; i++)
-        if (!strncmp(s, subcs[i], MAX_SUBC_LEN))
-            return 1;
-    return 0;
-}
-
 // TODO: specific error messages
 // TODO: all max checks... should we add +1 to the max?
 int arg_init(arg_t *state, arg_config_t *config, unsigned int in_subc) {
@@ -68,6 +60,7 @@ int arg_init(arg_t *state, arg_config_t *config, unsigned int in_subc) {
         if (i + 1 == (ARG_MAX_ARGS))
             return -1; // cannot add help, would exceed max
         config->args[i] = ARG_DEFAULT_HELP_FLAG;
+        config->args[i + 1] = NULL;
         state->n_args++;
     }
 
@@ -118,8 +111,8 @@ int parse_short(arg_t *s, size_t n_args, arg_arg_t *const *args, int argc,
     return ARG_OK;
 }
 
-int parse_long(arg_t *s, size_t n_args, arg_arg_t *const *args, int argc,
-               char **argv) {
+ARG_PRIVATE int parse_long(arg_t *s, size_t n_args, arg_arg_t *const *args,
+                           int argc, char **argv) {
     size_t i, arg_len;
     arg_arg_t *arg = NULL;
     char *arg_str;
@@ -155,8 +148,9 @@ int parse_long(arg_t *s, size_t n_args, arg_arg_t *const *args, int argc,
     return ARG_OK;
 }
 
-int parse_subcommand_or_positional(arg_t *s, const char *const *subcs,
-                                   char **argv) {
+ARG_PRIVATE int parse_subcommand_or_positional(arg_t *s,
+                                               const char *const *subcs,
+                                               char **argv) {
     size_t i;
     char *arg_str;
     size_t *n_pos_seen = &s->n_pos_seen;
@@ -199,6 +193,7 @@ int arg_parse(int argc, char **argv, arg_t *s, const arg_config_t *config) {
     size_t n_args = s->n_args;
 
     if (s->optind == argc)
+        // TODO: validate end state
         //     return validate_end_state(s, config);
         return ARG_DONE;
 
@@ -238,6 +233,16 @@ void arg_usage(char *argv0, arg_t *state, char *subc_name,
             printf(" COMMAND");
         else
             printf(" [COMMAND]");
+    }
+    // TODO: required positional args? are all required?
+    // TOOD: upper case!
+    // TODO: actually test this
+    // TODO: print positional arg help below.
+    if (state->n_pos > 0) {
+        for (i = 0; i < state->n_pos; i++)
+            printf(" %s", config->args[state->pos_idx[i]]->longname);
+        if (state->has_mult_pos)
+            printf("...");
     }
     printf("\n\n%s\n", config->description);
     if (state->n_subc > 0)
@@ -281,80 +286,63 @@ void arg_usage(char *argv0, arg_t *state, char *subc_name,
                argv0);
 }
 
-// TODO: validate that all required arguments were provided
 // TODO: minimal usage
 void arg_print_error(int ret, arg_t *s, char **argv) {
-    unsigned int printed = 0;
+    unsigned int internal = 0;
     printf("Error: ");
     switch (ret) {
     case ARG_ERR_CONFIG_TOO_MANY_ARGS:
         puts("Too many arguments given to cli config.");
-        printed = 1;
+        internal = 1;
         break;
     case ARG_ERR_CANNOT_ADD_HELP:
         puts("Cannot add help parameter, would exceed max arguments.");
-        printed = 1;
+        internal = 1;
         break;
     case ARG_ERR_TOO_MANY_SUBCOMMANDS:
         puts("Too many subcommands given to cli config.");
-        printed = 1;
-        break;
-    case ARG_ERR_GENERIC:
-        puts("Generic CLI parsing error occurred.");
+        internal = 1;
         break;
     case ARG_ERR_INIT:
-        printed = 1;
+        internal = 1;
         puts("An error occurred during initialization.");
         break;
-    }
-    if (printed) {
-        puts("The above error is the responsibility of the program author.");
-        return;
-    }
-
-    switch (ret) {
     case ARG_ERR_MISSING_ARGUMENT:
         printf("Option requires argument: '-%c'.\n",
                argv[s->optind][s->optpos]);
-        printed = 1;
         break;
     case ARG_ERR_MISSING_LONG_ARGUMENT:
         printf("Option requires argument: '%s'.\n", argv[s->optind]);
-        printed = 1;
         break;
     case ARG_ERR_UNKNOWN_ARGUMENT:
         printf("Unknown argument: '-%c'.\n", argv[s->optind][s->optpos]);
-        printed = 1;
         break;
     case ARG_ERR_UNKNOWN_LONG_ARGUMENT:
         printf("Unknown argument: '%s'.\n", argv[s->optind]);
-        printed = 1;
         break;
     case ARG_ERR_TOO_MANY_POSITIONALS:
         puts("Too many positional arguments provided.");
-        printed = 1;
         break;
     case ARG_ERR_GENERIC:
         puts("Generic error encountered when parsing commands.");
-        printed = 1;
         break;
     case ARG_ERR_NO_LONG_ARGS:
         puts("This program was not configured to accept long arguments.");
-        printed = 1;
         break;
     case ARG_ERR_SUBC_REQUIRED:
         puts("A subcommand is required, none were provided.");
-        printed = 1;
         break;
     case ARG_ERR_UNKNOWN_SUBC:
-        printed = 1;
         printf("An unknown subcommand was provided: %s.\n", argv[s->optind]);
         break;
-    }
-    puts("See -h or --help for more details."); // TODO: only print when help
-                                                // present?
-    if (!printed) {
+    default:
         puts("Error: An unknown error occurred\n");
-        puts("The above error is the responsibility of the program author.\n");
+        internal = 1;
+        break;
     }
+    if (internal)
+        puts("The above error is the responsibility of the program author.");
+    else
+        // TODO: only print when help present?
+        puts("See -h or --help for more details.");
 }
