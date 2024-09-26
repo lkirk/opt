@@ -37,7 +37,7 @@ if not meson.is_subproject()
     'test_init',
     include_directories: inc,
     dependencies: cmocka,
-    sources: ['arg.c', 'test_init.c']
+    sources: ['arg.c', 'tests/test_init.c']
   )
   test(
     'test_init',
