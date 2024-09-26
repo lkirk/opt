@@ -6,34 +6,34 @@
 
 #include <cmocka.h>
 
-#include "arg.h"
+#include "opt.h"
 
-void test_arg_macro(void **ARG_UNUSED(state)) {
-    arg_arg_t *arg = ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "test");
-    arg_arg_t *expected =
-        &(arg_arg_t){'a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "test"};
+void test_opt_macro(void **OPT_UNUSED(state)) {
+    opt_arg_t *arg = ARG('a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "test");
+    opt_arg_t *expected =
+        &(opt_arg_t){'a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "test"};
     assert_int_equal(arg->shortname, expected->shortname);
     assert_int_equal(arg->type, expected->type);
     assert_string_equal(arg->longname, expected->longname);
     assert_string_equal(arg->help, expected->help);
     // make sure we haven't added any fields
-    assert_int_equal(32, sizeof(arg_arg_t));
+    assert_int_equal(32, sizeof(opt_arg_t));
 }
 
-void test_no_subc_no_help(void **ARG_UNUSED(state)) {
-    arg_t s, expected;
-    arg_config_t conf = {
+void test_no_subc_no_help(void **OPT_UNUSED(state)) {
+    opt_t s, expected;
+    opt_config_t conf = {
         .parse_long = 1,
         .add_help = 0,
         .subcommand_required = 0,
         .description = "test",
         .subcommands = {NULL},
-        .args = {ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "Required opt"),
+        .args = {ARG('a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "Required opt"),
                  NULL}};
-    arg_init(&s, &conf, 0);
+    opt_init(&s, &conf, 0);
     memset(&expected, 0, sizeof(expected));
     memset(&(&expected)->pos_idx, -1,
-           sizeof(*(&expected)->pos_idx) * ARG_MAX_ARGS);
+           sizeof(*(&expected)->pos_idx) * OPT_MAX_ARGS);
     expected.optind = 1;
     expected.optpos = 1;
     expected.n_args = 1;
@@ -41,25 +41,25 @@ void test_no_subc_no_help(void **ARG_UNUSED(state)) {
     assert_memory_equal(&expected, &s, sizeof(s));
 }
 
-void test_no_subc_with_help(void **ARG_UNUSED(state)) {
-    arg_t s, expected;
-    arg_config_t conf = {
+void test_no_subc_with_help(void **OPT_UNUSED(state)) {
+    opt_t s, expected;
+    opt_config_t conf = {
         .parse_long = 1,
         .add_help = 1,
         .subcommand_required = 0,
         .description = "test",
         .subcommands = {NULL},
-        .args = {ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "Required opt"),
+        .args = {ARG('a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "Required opt"),
                  NULL}};
-    arg_arg_t *expected_args[3] = {
-        ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "Required opt"),
+    opt_arg_t *expected_args[3] = {
+        ARG('a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "Required opt"),
         ARG('h', "help", 0, "Print help message and exit."),
         NULL,
     };
-    arg_init(&s, &conf, 0);
+    opt_init(&s, &conf, 0);
     memset(&expected, 0, sizeof(expected));
     memset(&(&expected)->pos_idx, -1,
-           sizeof(*(&expected)->pos_idx) * ARG_MAX_ARGS);
+           sizeof(*(&expected)->pos_idx) * OPT_MAX_ARGS);
     expected.optind = 1;
     expected.optpos = 1;
     expected.n_args = 2;
@@ -71,25 +71,25 @@ void test_no_subc_with_help(void **ARG_UNUSED(state)) {
     assert_int_equal(conf.args[2], expected_args[2]);
 }
 
-void test_subc_with_help(void **ARG_UNUSED(state)) {
-    arg_t s, expected;
-    arg_config_t conf = {
+void test_subc_with_help(void **OPT_UNUSED(state)) {
+    opt_t s, expected;
+    opt_config_t conf = {
         .parse_long = 1,
         .add_help = 1,
         .subcommand_required = 1,
         .description = "test",
         .subcommands = {"command1", NULL},
-        .args = {ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "Required opt"),
+        .args = {ARG('a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "Required opt"),
                  NULL}};
-    arg_arg_t *expected_args[3] = {
-        ARG('a', "a-opt", ARG_REQUIRED | ARG_HAS_ARG, "Required opt"),
+    opt_arg_t *expected_args[3] = {
+        ARG('a', "a-opt", OPT_REQUIRED | OPT_HAS_ARG, "Required opt"),
         ARG('h', "help", 0, "Print help message and exit."),
         NULL,
     };
-    arg_init(&s, &conf, 0);
+    opt_init(&s, &conf, 0);
     memset(&expected, 0, sizeof(expected));
     memset(&(&expected)->pos_idx, -1,
-           sizeof(*(&expected)->pos_idx) * ARG_MAX_ARGS);
+           sizeof(*(&expected)->pos_idx) * OPT_MAX_ARGS);
     expected.optind = 1;
     expected.optpos = 1;
     expected.n_args = 2;
@@ -105,7 +105,7 @@ void test_subc_with_help(void **ARG_UNUSED(state)) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_arg_macro),
+        cmocka_unit_test(test_opt_macro),
         cmocka_unit_test(test_no_subc_no_help),
         cmocka_unit_test(test_no_subc_with_help),
         cmocka_unit_test(test_subc_with_help),

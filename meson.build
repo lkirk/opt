@@ -1,5 +1,5 @@
 project(
-  'arg', 'c',
+  'opt', 'c',
   version: run_command(
     'git', 'describe', '--always', '--dirty', check: false
   ).stdout().strip(),
@@ -18,14 +18,14 @@ c_args = [
 inc = include_directories('.')
 
 lib = library(
-  'arg',
-  'arg.c',
+  'opt',
+  'opt.c',
   include_directories: inc,
   version: '0.1',
   soversion: '1',
   install: true
 )
-arg_dep = declare_dependency(
+opt_dep = declare_dependency(
   link_with: lib,
   version: meson.project_version()
 )
@@ -37,7 +37,7 @@ if not meson.is_subproject()
     'test_init',
     include_directories: inc,
     dependencies: cmocka,
-    sources: ['arg.c', 'tests/test_init.c']
+    sources: ['opt.c', 'tests/test_init.c']
   )
   test(
     'test_init',
