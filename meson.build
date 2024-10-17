@@ -1,5 +1,5 @@
 project(
-  'opt', 'c',
+  'libopt', 'c',
   version: run_command(
     'git', 'describe', '--always', '--dirty', check: false
   ).stdout().strip(),
