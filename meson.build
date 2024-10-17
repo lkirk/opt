@@ -25,7 +25,7 @@ lib = library(
   soversion: '1',
   install: true
 )
-libopt = declare_dependency(
+opt_dep = declare_dependency(
   include_directories: inc,
   link_with: lib,
   version: meson.project_version()
