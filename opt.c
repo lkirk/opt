@@ -90,7 +90,7 @@ int parse_short(opt_t *s, size_t n_args, opt_arg_t *const *args, int argc,
         return OPT_ERR_UNKNOWN_ARGUMENT;
     s->argind = i;
     arg = args[i];
-    if (arg->type & OPT_REQUIRED) {
+    if (arg->type & OPT_HAS_ARG) {
         s->optpos++;
         if (!opt_str[s->optpos] && s->optind == argc - 1)
             return OPT_ERR_MISSING_ARGUMENT;
@@ -129,7 +129,7 @@ OPT_PRIVATE int parse_long(opt_t *s, size_t n_args, opt_arg_t *const *args,
     if (!arg)
         return OPT_ERR_UNKNOWN_LONG_ARGUMENT; // Unexpected argument
     s->argind = i;
-    if (arg->type & OPT_REQUIRED) {
+    if (arg->type & OPT_HAS_ARG) {
         s->optpos += opt_len; // advance to end of arg
         if (!opt_str[s->optpos] && s->optind == argc - 1)
             return OPT_ERR_MISSING_LONG_ARGUMENT;
